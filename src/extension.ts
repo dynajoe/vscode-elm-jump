@@ -1,8 +1,11 @@
 'use strict';
 import * as vscode from 'vscode'
 import * as _ from 'lodash'
+const Elm = require('./elm.js')
 
 const ELM_MODE: vscode.DocumentFilter = { language: 'elm', scheme: 'file' }
+
+const elm_app = Elm.App.worker()
 
 export async function findElmFiles(): Promise<vscode.Uri[]> {
     const path_to_search = `**/*.elm`
@@ -20,6 +23,12 @@ async function extractExposedTypes(elm_file: vscode.Uri): Promise<TypeDefinition
     const text_document = await vscode.workspace.openTextDocument(elm_file)
 
     const elm_file_lines = text_document.getText().split('\n')
+
+    elm_app.ports.parseInput.send(text_document.getText())
+
+    elm_app.ports.parseOutput.subscribe((data) => {
+        console.log(data)
+    })
 
     const type_declaration_lines = elm_file_lines
         .map((l, i) => ({ line_number: i, text: l, matches: l.match(/^type( alias)? (\w+)/) }))
