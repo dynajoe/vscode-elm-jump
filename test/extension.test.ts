@@ -10,13 +10,37 @@ import * as assert from 'assert';
 // as well as import your extension to test it
 import * as vscode from 'vscode';
 import * as myExtension from '../src/extension';
+import * as Parser from '../src/parse'
 
-// Defines a Mocha test suite to group tests of similar kind together
-suite("Extension Tests", () => {
+const typeAliasExample = `
+type alias DoseEvent =
+    { doseEventId : Maybe DoseEventId
+    , deviceAssignmentId : DeviceAssignmentId
+    , takenOn : Time.ZonedDateTime.ZonedDateTime
+    , amount : Int
+    , periodDate : Time.Date.Date
+    , periodNumber : Int
+    , timezone : Time.TimeZone.TimeZone
+    , doseEventCorrection : Maybe DoseEventCorrection
+    }`
 
-    // Defines a Mocha unit test
-    test("Something 1", () => {
-        assert.equal(-1, [1, 2, 3].indexOf(5));
-        assert.equal(-1, [1, 2, 3].indexOf(0));
-    });
-});
+const importExample = `import Foo.Bar as X exposing (baz)`
+
+const typeDeclaration1 = `type Visibility = All | Active | Completed`
+
+suite('Parsing Tests', () => {
+    test('type aliases', () => {
+        const parse_result = Parser.parse(typeAliasExample)
+        assert(parse_result.status)
+    })
+
+    test('import statements', () => {
+        const parse_result = Parser.parse(importExample)
+        assert(parse_result.status)
+    })
+
+    test('type declaration', () => {
+        const parse_result = Parser.parse(typeDeclaration1)
+        assert(parse_result.status)
+    })
+})
