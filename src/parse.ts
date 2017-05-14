@@ -1,44 +1,50 @@
-var fs = require('fs');
-var path = require('path');
-var util = require('util');
-var P = require('parsimmon');
 import * as _ from 'lodash'
 
-function commaSep(parser) {
-  return P.sepBy(parser, token(comma));
-}
-
-var whitespace = P.regexp(/\s*/m);
+const P = require('parsimmon')
 
 function token(p) {
   return p.skip(whitespace)
 }
 
-var lbrace = token(P.string('{'));
-var rbrace = token(P.string('}'));
-var lparen = token(P.string('('));
-var rparen = token(P.string(')'));
-var comma = token(P.string(','));
-var colon = token(P.string(':'));
-var equal = token(P.string('='));
-var pipe = token(P.string('|'));
+const whitespace = P.regexp(/\s*/m)
+const lbrace = token(P.string('{'))
+const rbrace = token(P.string('}'))
+const lparen = token(P.string('('))
+const rparen = token(P.string(')'))
+const comma = token(P.string(','))
+const colon = token(P.string(':'))
+const equal = token(P.string('='))
+const pipe = token(P.string('|'))
+const arrow = token(P.string('->'))
 
-var name = P.regexp(/[a-z][a-zA-Z0-9_]*/)
-var upName = P.regexp(/[A-Z][a-zA-Z0-9_]*/)
-var moduleName = P.sepBy(upName, P.string('.')).map(x => x.join('.'))
+const loName = P.regexp(/[a-z][a-zA-Z0-9_]*/)
+const upName = P.regexp(/[A-Z][a-zA-Z0-9_]*/)
+const moduleName = P.sepBy(upName, P.string('.')).map(x => x.join('.'))
 
-var exportList = lparen.then(
+function braces(parser) {
+  return lbrace.then(parser.skip(whitespace)).skip(rbrace)
+}
+
+function parens(parser) {
+  return lparen.then(parser.skip(whitespace)).skip(rparen)
+}
+
+function commaSep(parser) {
+  return P.sepBy(parser.skip(whitespace), token(comma))
+}
+
+const exportList = lparen.then(
    P.alt(
       P.sepBy1(
-         P.alt(name, upName), token(comma)
+         P.alt(loName, upName), token(comma)
       ),
       token(P.string('..')).result('*'),
    )
 ).skip(rparen)
 
-var exposingClause = token(P.string('exposing')).then(exportList).fallback([])
+const exposingClause = token(P.string('exposing')).then(exportList).fallback([])
 
-var moduleStatement = token(P.regexp(/(port )?module/))
+const moduleStatement = token(P.regexp(/(port )?module/))
   .then(P.seq(
      moduleName,
      exposingClause
@@ -51,7 +57,7 @@ var moduleStatement = token(P.regexp(/(port )?module/))
     }
   })
 
-var importStatement = token(P.string('import'))
+const importStatement = token(P.string('import'))
    .then(P.seq(
       token(moduleName),
       token(P.string('as')).then(token(upName)).fallback(null),
@@ -66,57 +72,86 @@ var importStatement = token(P.string('import'))
       }
    })
 
-var typeConstructor = P.sepBy(moduleName, token(P.string(' '))).skip(whitespace)
+const typeVariable = P.regexp(/[a-z]+(\\w|_)*/).desc('typeVariable')
 
-var typeRecordDefinition = P.lazy(function () {
-      return lbrace.then(
-         commaSep(
-            P.seq(
-               token(name).skip(colon),
-               P.alt(
-                  typeRecordDefinition,
-                  typeConstructor
-               )
-            )
-            .map(([name, type]) => {
-               return {
-                  name,
-                  type
-               }
-            })
-         )
-      ).skip(rbrace)
-   })
+const typeConstant = token(P.sepBy1(upName, P.string('.')))
 
-var typeAliasDefinition = P.alt(typeRecordDefinition, moduleName)
+const typeParameter = P.lazy(() => {
+  return P.alt(
+    typeVariable,
+    typeConstant,
+    typeRecordConstructor,
+    typeRecord,
+    typeTuple,
+    parens(typeAnnotation)
+  )
+})
 
-var typeAliasDeclaration = token(P.string('type alias'))
-   .then(P.seq(
-      token(upName).skip(equal),
-      typeAliasDefinition
-   ))
-   .map(([name, definition]) => {
-      return {
-         kind: 'type_alias',
-         name: name,
-         definition: definition
-      }
-   })
+const typeAnnotation = P.lazy(() => P.sepBy1(type_, arrow))
 
-var typeDeclaration = token(P.string('type'))
-   .then(P.seq(
-      token(upName).skip(equal),
-      P.sepBy1(typeConstructor, pipe)
-   ))
-   .map(([name, constructors]) => {
-      return {
-         kind: 'type',
-         name: name,
-         constructors: constructors
-      }
-   })
+const typeRecord = P.lazy(() => braces(typeRecordPairs)).desc('typeRecord')
 
-var elmStatement = P.lazy(function () {
+const typeTuple = P.lazy(() => parens(commaSep(type_))).desc('typeTuple')
+
+const typeRecordPair = P.seq(
+    token(loName).skip(colon),
+    typeAnnotation
+)
+
+const typeRecordPairs = commaSep(
+  typeRecordPair
+)
+
+const typeRecordConstructor = P.lazy(() => {
+  return braces(P.seq(
+    token(typeVariable).skip(pipe),
+    typeRecordPairs
+  ))
+}).desc('typeRecordConstructor')
+
+const typeConstructor = P.lazy(() => {
+  return P.seq(
+    P.sepBy1(upName, P.string('.')),
+    typeParameter.many()
+  )
+}).desc('typeConstructor')
+
+const type_ = P.lazy(() => {
+  return whitespace.then(P.alt(
+    typeConstructor,
+    typeVariable,
+    typeRecordConstructor,
+    typeRecord,
+    typeTuple,
+    parens(typeAnnotation)
+  ))
+})
+
+const typeAliasDeclaration = token(P.string('type alias')).then(
+  P.seq(
+    type_.skip(whitespace).skip(equal).map(([ name, extra ]) => ({ name: name.join(''), extra: extra})),
+    typeAnnotation
+  )
+).map(([ declaration, annotation ]) => {
+  return {
+    kind: 'type_alias',
+    name: declaration.name,
+  }
+})
+
+const typeDeclaration = token(P.string('type')).then(
+  P.seq(
+    type_.skip(whitespace).skip(equal).map(([ name, extra ]) => ({ name: name.join(''), extra: extra})),
+    P.sepBy1(whitespace.then(typeConstructor), pipe)
+  )
+).map(([ declaration ]) => {
+  return {
+    kind: 'type',
+    name: declaration.name,
+  }
+})
+
+const elmStatement = P.lazy(function () {
     return whitespace.then(
         P.seq(
           P.index,
@@ -134,7 +169,7 @@ var elmStatement = P.lazy(function () {
        }).many()
     )
     .map(x => _.compact(x))
-});
+})
 
 export interface Statement {
    kind: string

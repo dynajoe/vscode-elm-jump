@@ -32,7 +32,7 @@ function extractExposedTypes(parse_result: Parser.ElmParseResult): ExposedType[]
         .filter(x => x.kind === 'type' || x.kind === 'type_alias')
         .map<ExposedType>((x: Parser.NamedStatement) => ({
             name: x.name,
-            position: new vscode.Position(x.position.line, 0),
+            position: new vscode.Position(x.position.line - 1, 0),
         }))
 }
 
