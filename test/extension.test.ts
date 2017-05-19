@@ -12,7 +12,9 @@ import * as vscode from 'vscode';
 import * as myExtension from '../src/extension';
 import * as Parser from '../src/parse'
 
-const typeAliasExample = `
+const typeAliasExample_a = `type alias RequestBody =
+    Maybe Request
+
 type alias DoseEvent =
     { doseEventId : Maybe DoseEventId
     , deviceAssignmentId : DeviceAssignmentId
@@ -22,6 +24,18 @@ type alias DoseEvent =
     , periodNumber : Int
     , timezone : Time.TimeZone.TimeZone
     , doseEventCorrection : Maybe DoseEventCorrection
+}`
+
+const typeAliasExample = `type alias Context =
+    Maybe String
+
+
+type alias Paged a =
+    { body : List a
+    , totalCount : Int
+    , pageNumber : Int
+    , pageSize : Int
+    , context : Context
     }`
 
 const importExample = `import Foo.Bar as X exposing (baz)`
